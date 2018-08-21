@@ -26,74 +26,80 @@ observer2.observe({entryTypes: ["resource"]});
 
 // Process 
 function processTimes(resources) {
-  // Check performance support
-  if (performance === undefined) {
-    console.log("= Calculate Load Times: performance NOT supported");
-    return;
-  }
+  	var current_spans = [];
+ 	// Check performance support
+ 	if (performance === undefined) {
+    	console.log("= Calculate Load Times: performance NOT supported");
+    	return;
+  	}
 
-  // Get a list of "resource" performance entries
-  if (resources === undefined || resources.length <= 0) {
-    console.log("= Calculate Load Times: there are NO `resource` performance records");
-    return;
-  }
+	// Get a list of "resource" performance entries
+	if (resources === undefined || resources.length <= 0) {
+		console.log("= Calculate Load Times: there are NO `resource` performance records");
+	    return;
+	}
 
-  console.log("= Calculate Load Times");
-  for (var i=0; i < resources.length; i++) {
-    var spanID = Math.floor(Math.random()*10000000)
+  	console.log("= Calculate Load Times");
+  	for (var i=0; i < resources.length; i++) {
+	  	// Resource Name
+	    var resourceName = resources[i].name;
+	  	if (resourceName.indexOf(DD_POST_URL) > 0)
+	  		continue;
 
-    console.log("== Resource[" + i + "] - " + resources[i].name);
-    // Resource Info
-    console.log(resources[i]);
+	    var spanID = Math.floor(Math.random()*10000000)
 
-    // Resource Name
-    var resourceName = resources[i].name;
+	    console.log("== Resource[" + i + "] - " + resources[i].name);
+	    // Resource Info
+	    console.log(resources[i]);
 
-    // Resource Meta
-    var dataType = resources[i].entryType;
-    var resourceType = resources[i].initiatorType;
-    var protocol = resources[i].nextHopProtocol;
+	    // Resource Meta
+	    var dataType = resources[i].entryType;
+	    var resourceType = resources[i].initiatorType;
+	    var protocol = resources[i].nextHopProtocol;
 
-    ///// GET TIMING DATA //////
-    // Start Time
-    var start = Math.floor((resources[i].startTime * 1000000) + scriptStart);
-    // Duration
-    var duration = Math.floor(resources[i].duration * 1000000);
-    // Protocol
-    var networkProtocol = resources[i].nextHopProtocol;
+	    ///// GET TIMING DATA //////
+	    // Start Time
+	    var start = Math.floor((resources[i].startTime * 1000000) + scriptStart);
+	    // Duration
+	    var duration = Math.floor(resources[i].duration * 1000000);
+	    // Protocol
+	    var networkProtocol = resources[i].nextHopProtocol;
 
-    // Build Datadog-friendly Span and add to the traces
-  	var span = {
-  		start: start,
-  		duration: duration,
-  		resource: resourceName,
-  		service: resourceType+"."+DD_SERVICE,
-  		name: resourceType,
-  		type: "web",
-  		meta: {
-  			page_url: window.location.pathname,
-  			protocol: networkProtocol
-  		},
-  		parent_id: pageSpanID,
-  		trace_id: traceID,
-  		span_id: spanID 
-  	};
+	    // Build Datadog-friendly Span and add to the traces
+	  	var span = {
+	  		start: start,
+	  		duration: duration,
+	  		resource: resourceName,
+	  		service: resourceType+"."+DD_SERVICE,
+	  		name: resourceType,
+	  		type: "web",
+	  		meta: {
+	  			page_url: window.location.pathname,
+	  			protocol: networkProtocol
+	  		},
+	  		parent_id: pageSpanID,
+	  		trace_id: traceID,
+	  		span_id: spanID 
+	  	};
 
-  	///// GET SIZING DATA //////
-    if ("decodedBodySize" in resources[i])
-      span.meta.decodedBodySize = resources[i].decodedBodySize.toString();
+	  	///// GET SIZING DATA //////
+	    if ("decodedBodySize" in resources[i])
+	      span.meta.decodedBodySize = resources[i].decodedBodySize.toString();
 
-    if ("encodedBodySize" in resources[i])
-      span.meta.encodedBodySize = resources[i].encodedBodySize.toString();
+	    if ("encodedBodySize" in resources[i])
+	      span.meta.encodedBodySize = resources[i].encodedBodySize.toString();
 
-    if ("transferSize" in resources[i])
-      span.meta.transferSize = resources[i].transferSize.toString();
+	    if ("transferSize" in resources[i])
+	      span.meta.transferSize = resources[i].transferSize.toString();
 
-  	// Append final tags
-  	Object.keys(DD_TAGS).forEach(key => span.meta[key] = DD_TAGS[key]);
+	  	// Append final tags
+	  	Object.keys(DD_TAGS).forEach(key => span.meta[key] = DD_TAGS[key]);
 
-  	trace.push(span);
-  }
+		current_spans.push(span);
+	}
+	if (current_spans.length > 0) {
+		postDDTraces([current_spans]);
+	}
 }
 
 // Send request to APM proxy.
@@ -140,8 +146,8 @@ window.onload = function() {
 			trace_id: traceID,
 			span_id: pageSpanID 
 	  	};
-  		trace.push(span);
-	 	console.log(JSON.stringify([trace]));
-	 	postDDTraces([trace]);
+	 	postDDTraces([[span]]);
+	 	// Page loaded, disconnect the observer. No reason to keep collecting requests as they should be tracked with APM.
+	 	observer2.disconnect();
 	 }, 0);
 };
