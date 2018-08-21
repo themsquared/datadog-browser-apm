@@ -1,6 +1,10 @@
 // Set DD_POST_URL to proxy back to the Datadog Agent. You'll need to use nginx, apache, etc to reverse proxy to
 // the Datadog agent APM API.
 var DD_POST_URL = "/dd_stats_proxy";
+var DD_TAGS = {
+	"test":"tagvalue"
+}
+var DD_SERVICE = "myAwesomeWebService"
 
 // Starting time in nanoseconds
 var scriptStart = (new Date().getTime()) * 1000000;
@@ -55,46 +59,39 @@ function processTimes(resources) {
     var start = Math.floor((resources[i].startTime * 1000000) + scriptStart);
     // Duration
     var duration = Math.floor(resources[i].duration * 1000000);
-
+    // Protocol
     var networkProtocol = resources[i].nextHopProtocol;
 
-    ///// GET SIZING DATA //////
-    if ("decodedBodySize" in resources[i])
-      var decodedBodySize = resources[i].decodedBodySize;
-    else
-      var decodedBodySize = 0;
-      console.log("... decodedBodySize[" + i + "] = NOT supported");
-
-    if ("encodedBodySize" in resources[i])
-      var encodedBodySize = resources[i].encodedBodySize;
-    else
-      var encodedBodySize = 0;
-      console.log("... encodedBodySize[" + i + "] = NOT supported");
-
-    if ("transferSize" in resources[i])
-      var transferSize = resources[i].transferSize;
-    else
-   	  var transferSize = 0;
-      console.log("... transferSize[" + i + "] = NOT supported");
-  
+    // Build Datadog-friendly Span and add to the traces
   	var span = {
   		start: start,
   		duration: duration,
-  		resource: window.location.pathname,
-  		service: "myAwesomeWebService",
+  		resource: resourceName,
+  		service: resourceType+"."+DD_SERVICE,
   		name: resourceType,
   		type: "web",
   		meta: {
-  			resource_name: resourceName,
-  			decodedSize: decodedBodySize.toString(),
-  			encodedSize: encodedBodySize.toString(),
-  			transferSize: transferSize.toString(),
+  			page_url: window.location.pathname,
   			protocol: networkProtocol
   		},
   		parent_id: pageSpanID,
   		trace_id: traceID,
   		span_id: spanID 
   	};
+
+  	///// GET SIZING DATA //////
+    if ("decodedBodySize" in resources[i])
+      span.meta.decodedBodySize = resources[i].decodedBodySize.toString();
+
+    if ("encodedBodySize" in resources[i])
+      span.meta.encodedBodySize = resources[i].encodedBodySize.toString();
+
+    if ("transferSize" in resources[i])
+      span.meta.transferSize = resources[i].transferSize.toString();
+
+  	// Append final tags
+  	Object.keys(DD_TAGS).forEach(key => span.meta[key] = DD_TAGS[key]);
+
   	trace.push(span);
   }
 }
@@ -129,10 +126,11 @@ window.onload = function() {
 			start: scriptStart,
 			duration: pageLoadTime,
 			resource: window.location.pathname,
-			service: "myAwesomeWebService",
+			service: DD_SERVICE,
 			name: "html",
 			type: "web",
 			meta: {
+				title: document.title,
 				browser: navigator.appName,
 				browser_version: navigator.appVersion,
 				useragent: navigator.userAgent,
